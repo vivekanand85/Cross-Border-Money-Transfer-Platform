@@ -1,0 +1,99 @@
+package com.moneytransfer.ledger_service.service;
+
+import java.time.OffsetDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.moneytransfer.ledger_service.dto.LedgerEntryRequest;
+import com.moneytransfer.ledger_service.dto.PostTransactionRequest;
+import com.moneytransfer.ledger_service.entity.LedgerEntry;
+import com.moneytransfer.ledger_service.entity.Transaction;
+import com.moneytransfer.ledger_service.exception.CurrencyMismatchException;
+import com.moneytransfer.ledger_service.exception.UnbalancedTransactionException;
+import com.moneytransfer.ledger_service.repo.LedgerEntryRepository;
+import com.moneytransfer.ledger_service.repo.TransactionRepository;
+
+import lombok.RequiredArgsConstructor;
+
+@Service
+@RequiredArgsConstructor
+public class TransactionService {
+
+	private final TransactionRepository transactionRepository;
+	private final LedgerEntryRepository ledgerEntryRepository;
+	
+	@Transactional
+	public Transaction postTransaction(PostTransactionRequest request) {
+		var existing=transactionRepository.findByIdempotencyKey(request.getIdempotencyKey());
+		if(existing.isPresent()) {
+			return existing.get();
+		}
+		
+		List<LedgerEntryRequest> entries=request.getEntries();
+		
+		if(entries==null || entries.size()<2) {
+			throw new UnbalancedTransactionException(
+					"A transaction requires at least two ledger entries(one debit,one credit).");
+		}
+		
+		long debitTotal=entries.stream()
+				.filter(e->e.getEntryType()==LedgerEntry.EntryType.DEBIT)
+				.mapToLong(LedgerEntryRequest::getAmount).sum();
+		
+		long creditTotal=entries.stream().filter(e->e.getEntryType()==LedgerEntry.EntryType.CREDIT)
+				.mapToLong(LedgerEntryRequest::getAmount).sum();
+		
+		
+		if (debitTotal != creditTotal) {
+            throw new UnbalancedTransactionException(
+                    "Debits (" + debitTotal + ") do not equal credits (" + creditTotal
+                            + ") for idempotencyKey=" + request.getIdempotencyKey());
+        }
+		
+		boolean hasNonPositiveAmount = entries.stream()
+                .anyMatch(e -> e.getAmount() == null || e.getAmount() <= 0);
+        if (hasNonPositiveAmount) {
+            throw new UnbalancedTransactionException("All ledger entry amounts must be strictly positive.");
+        }
+        
+        
+        if (request.getCurrency() == null || request.getCurrency().length() != 3) {
+            throw new CurrencyMismatchException("Transaction currency must be a valid 3-letter ISO code.");
+        }
+        
+        OffsetDateTime now = OffsetDateTime.now();
+        
+        Transaction transaction=Transaction.builder()
+        		.idempotencyKey(request.getIdempotencyKey())
+        		.transactionType(request.getTransactionType())
+        		.currency(request.getCurrency())
+        		.status("POSTED")
+        		.createdAt(now)
+        		.build();
+        
+        
+        Transaction savedTransaction = transactionRepository.save(transaction);
+        
+        List<LedgerEntry> ledgerEntries=entries.stream()
+        		.map(e->LedgerEntry.builder()
+        				.transactionId(savedTransaction.getId())
+        				.accountId(e.getAccountId())
+        				.entryType(e.getEntryType())
+        				.amount(e.getAmount())
+        				.currency(request.getCurrency())
+        				.createdAt(now)
+        				.build())
+        		.collect(Collectors.toList());
+        
+        ledgerEntryRepository.saveAll(ledgerEntries);
+        
+        return savedTransaction;
+        		
+        		
+	}
+	
+	
+}
