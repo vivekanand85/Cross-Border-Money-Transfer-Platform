@@ -2,9 +2,9 @@ spring:
   application:
     name: ledger-service
   datasource:
-    url: jdbc:postgresql://localhost:5432/${POSTGRES_DB:ledger_db}
-    username: ${POSTGRES_USER:ledger_user}
-    password: ${POSTGRES_PASSWORD:ledger_pass}
+    url: jdbc:postgresql://localhost:5432/ledger_db
+    username: ledger_user
+    password: ledger_pass
   jpa:
     hibernate:
       ddl-auto: validate
