@@ -241,7 +241,7 @@ class TransactionServiceTest {
     private PostTransactionRequest balancedRequest(String idempotencyKey, long amount) {
         return PostTransactionRequest.builder()
                 .idempotencyKey(idempotencyKey)
-                .transactionType("TRANSFER")
+                 .transactionType("TRANSFER")
                 .currency("INR")
                 .entries(List.of(
                         LedgerEntryRequest.builder()

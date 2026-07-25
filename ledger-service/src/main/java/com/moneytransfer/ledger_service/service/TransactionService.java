@@ -97,13 +97,6 @@ public class TransactionService {
         return savedTransaction;
     }
 
-    /**
-     * Guards against idempotency-key reuse with a DIFFERENT payload. If a client
-     * sends the same idempotencyKey but the transactionType, currency, or the
-     * set of ledger entries differ from the original request, that's a client
-     * bug (key reused for a different logical transaction) — reject with 409,
-     * do NOT silently return the old transaction.
-     */
     private void validateSameRequest(Transaction existingTransaction, PostTransactionRequest incoming) {
 
         boolean typeMatches = Objects.equals(existingTransaction.getTransactionType(), incoming.getTransactionType());
