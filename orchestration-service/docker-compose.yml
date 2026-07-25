@@ -1,0 +1,17 @@
+services:
+  postgres-orchestration:
+    image: postgres:16-alpine
+    container_name: orchestration-postgres
+    environment:
+      POSTGRES_DB: orchestration_db
+      POSTGRES_USER: orchestration_user
+      POSTGRES_PASSWORD: orchestration_pass
+    ports:
+      - "5433:5433"
+    command: -p 5433
+    volumes:
+      - orchestration_pgdata:/var/lib/postgresql/data
+
+volumes:
+  ledger_pgdata:
+  orchestration_pgdata:
