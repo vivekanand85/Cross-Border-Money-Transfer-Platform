@@ -1,6 +1,9 @@
 package com.moneytransfer.orchestration_service.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.moneytransfer.orchestration_service.client.RiskScreeningClient;
+import com.moneytransfer.orchestration_service.dto.ScreeningRequest;
+import com.moneytransfer.orchestration_service.dto.ScreeningResult;
 import com.moneytransfer.orchestration_service.entity.OutboxEvent;
 import com.moneytransfer.orchestration_service.entity.Transfer;
 import com.moneytransfer.orchestration_service.entity.TransferStateTransition;
@@ -9,6 +12,8 @@ import com.moneytransfer.orchestration_service.ledgerclient.LedgerClient;
 import com.moneytransfer.orchestration_service.repo.OutboxEventRepository;
 import com.moneytransfer.orchestration_service.repo.TransferRepository;
 import com.moneytransfer.orchestration_service.repo.TransferStateTransitionRepository;
+import com.moneytransfer.orchestration_service.review.ReviewQueueEntry;
+import com.moneytransfer.orchestration_service.review.ReviewQueueRepository;
 import com.moneytransfer.orchestration_service.statemachine.TransferState;
 
 import lombok.RequiredArgsConstructor;
@@ -27,10 +32,10 @@ public class TransferOrchestrationService {
     private final TransferRepository transferRepository;
     private final TransferStateTransitionRepository transitionRepository;
     private final OutboxEventRepository outboxEventRepository;
-    
     private final LedgerClient ledgerClient;
+    private final RiskScreeningClient riskScreeningClient;
+    private final ReviewQueueRepository reviewQueueRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
-
 
     @Transactional
     public Transfer initiateTransfer(String idempotencyKey, Long amount, String currency,
@@ -60,6 +65,7 @@ public class TransferOrchestrationService {
 
         return saved;
     }
+
     @Transactional
     public Transfer transitionTo(UUID transferId, TransferState targetState, String triggeredBy, String reason) {
 
@@ -72,9 +78,11 @@ public class TransferOrchestrationService {
             throw new IllegalStateTransitionException(
                     "Illegal transition for transfer=" + transferId + ": " + currentState + " -> " + targetState);
         }
+
         if (targetState == TransferState.PAY_IN) {
             callLedgerForPayIn(transfer, targetState);
         }
+
         OffsetDateTime now = OffsetDateTime.now();
 
         transfer.setCurrentState(targetState);
@@ -85,17 +93,60 @@ public class TransferOrchestrationService {
 
         return saved;
     }
+
+    @Transactional
+    public Transfer runScreening(UUID transferId) {
+
+        Transfer transfer = transferRepository.findById(transferId)
+                .orElseThrow(() -> new IllegalStateTransitionException("No transfer found with id=" + transferId));
+
+
+        Transfer screening = transitionTo(transferId, TransferState.SCREENING, "SYSTEM", null);
+
+        ScreeningRequest request = ScreeningRequest.builder()
+                .transferId(screening.getId())
+                .amount(screening.getAmount())
+                .currency(screening.getCurrency())
+                .sourceAccountId(screening.getSourceAccountId())
+                .destAccountId(screening.getDestAccountId())
+                .build();
+
+        ScreeningResult result = riskScreeningClient.screen(request);
+
+        if ("APPROVE".equals(result.getDecision())) {
+            return transitionTo(transferId, TransferState.PAY_IN, "RISK_SCREENING",
+                    "Auto-approved, riskScore=" + result.getRiskScore());
+        } else {
+            Transfer parked = transitionTo(transferId, TransferState.PENDING_REVIEW, "RISK_SCREENING",
+                    "Routed to manual review, riskScore=" + result.getRiskScore() + ", reason=" + result.getReason());
+
+            ReviewQueueEntry entry = ReviewQueueEntry.builder()
+                    .transferId(parked.getId())
+                    .riskScore(result.getRiskScore())
+                    .reason(result.getReason())
+                    .status("PENDING")
+                    .createdAt(OffsetDateTime.now())
+                    .build();
+
+            reviewQueueRepository.save(entry);
+
+            return parked;
+        }
+    }
+
     private void callLedgerForPayIn(Transfer transfer, TransferState targetState) {
-    	String ledgerIdempotencyKey = transfer.getId() + "-" + targetState.name();
-    	ledgerClient.postTransaction(
+        String ledgerIdempotencyKey = transfer.getId() + "-" + targetState.name();
+
+        ledgerClient.postTransaction(
                 ledgerIdempotencyKey,
                 "TRANSFER_PAY_IN",
                 transfer.getCurrency(),
                 transfer.getSourceAccountId(),
-                transfer.getDestAccountId(),  
+                transfer.getDestAccountId(),
                 transfer.getAmount()
         );
     }
+
     private void recordTransitionAndOutbox(Transfer transfer, TransferState fromState, TransferState toState,
                                             String triggeredBy, String reason, OffsetDateTime now) {
 
@@ -122,7 +173,7 @@ public class TransferOrchestrationService {
         try {
             payloadJson = objectMapper.writeValueAsString(eventPayload);
         } catch (Exception e) {
-                        throw new IllegalStateException("Failed to serialize outbox event payload", e);
+            throw new IllegalStateException("Failed to serialize outbox event payload", e);
         }
 
         OutboxEvent outboxEvent = OutboxEvent.builder()

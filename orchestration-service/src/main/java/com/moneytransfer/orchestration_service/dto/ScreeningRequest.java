@@ -1,0 +1,23 @@
+package com.moneytransfer.orchestration_service.dto;
+
+import java.util.UUID;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ScreeningRequest {
+
+	private UUID transferId;
+	private Long amount;
+	private String currency;
+	private UUID sourceAccountId;
+	private UUID destAccountId;
+}

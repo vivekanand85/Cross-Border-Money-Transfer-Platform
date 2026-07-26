@@ -76,3 +76,54 @@ it is not literally a process-kill test. Worth stating precisely if asked.
   entries)
 - Screening/AML service integration (`SCREENING`/`PENDING_REVIEW` states
   exist but are driven manually via the API, not by a real screening call)
+
+## 7. Week 3 — Risk/AML screening integration
+
+**Pattern established:** interface (`RiskScreeningClient`) → resilience-wrapped
+implementation (`RiskScreeningClientImpl`, using Resilience4j `@Retry` +
+`@CircuitBreaker`) → stub vendor (WireMock, in tests) → fallback that fails
+SAFE (vendor down = route to manual review, never auto-approve). This same
+shape is intended to be reused for every future vendor integration
+(pay-in/pay-out, settlement, and any additional AML checks).
+
+**Proven, not assumed:**
+- `RiskScreeningClientImplTest` — real HTTP call + JSON parsing against
+  WireMock, both approve and manual-review response shapes.
+- `RiskScreeningRetryTest` — confirms exactly 3 HTTP attempts occur for one
+  failing call (matching `max-attempts: 3`), verified by counting real
+  requests WireMock received, not inferred.
+- `RiskScreeningCircuitBreakerTest` — confirms the circuit breaker actually
+  transitions to `OPEN` after repeated failures, read directly from
+  Resilience4j's own `CircuitBreakerRegistry`, not inferred indirectly.
+- `TransferScreeningIntegrationTest` — full `runScreening()` flow against
+  real Postgres: low-risk auto-advances to `PAY_IN`; high-risk parks in
+  `PENDING_REVIEW` with a real row in `review_queue_entries`.
+- `ReviewControllerIntegrationTest` — approve/decline endpoints proven over
+  real HTTP, correctly driving the transfer to `PAY_IN` or `FAILED`.
+
+**Deliberate design choice — fail-safe fallback:** when the risk vendor is
+unreachable (circuit open, or retries exhausted), the fallback returns
+`MANUAL_REVIEW`, never an automatic approval. A screening outage must never
+silently become "let everything through" — that would be a security hole,
+not a resilience feature.
+
+**Explored but NOT integrated:** a second client, `SanctionsScreeningClient`,
+calling the real (free, public) U.S. Consolidated Screening List API at
+api.trade.gov — a genuine sanctions/denied-party list check, distinct from
+the amount/pattern-based risk scoring `RiskScreeningClient` represents. Code
+was written to understand the pattern against a live external API, but it
+is NOT wired into `runScreening()`, has no tests, and is not part of the
+working saga flow. Left as a documented next step, not a completed feature —
+do not describe this as "integrated sanctions screening" until it actually
+is.
+
+## 8. Deferred / not yet implemented (updated)
+
+- Real Kafka consumer (publish-path proven, nobody subscribes yet)
+- `PAY_OUT` Ledger call (only `PAY_IN` wired)
+- Compensating transactions / reversal flow
+- `SanctionsScreeningClient` integration (see #7 — explored, not wired)
+- `runScreening()`'s open-transaction-across-network-call design smell
+  (flagged, not yet fixed — the Ledger/DB transaction boundary around the
+  vendor HTTP call could be tightened to avoid holding a DB connection open
+  during a slow/retrying vendor call)

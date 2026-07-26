@@ -25,7 +25,7 @@ public class TransferStateTransition {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "from_state", length = 30)
-    private TransferState fromState; // nullable — null for the very first INITIATED row
+    private TransferState fromState; 
 
     @Enumerated(EnumType.STRING)
     @Column(name = "to_state", nullable = false, length = 30)

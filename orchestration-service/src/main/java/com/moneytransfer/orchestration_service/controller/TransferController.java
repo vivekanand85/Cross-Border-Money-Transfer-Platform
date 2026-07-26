@@ -46,4 +46,11 @@ public class TransferController {
         );
         return ResponseEntity.ok(transfer);
     }
+	
+	
+    @PostMapping("/{transferId}/screen")
+    public ResponseEntity<Transfer> screen(@PathVariable UUID transferId) {
+        Transfer transfer = transferOrchestrationService.runScreening(transferId);
+        return ResponseEntity.ok(transfer);
+    }
 }

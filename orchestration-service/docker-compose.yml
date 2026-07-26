@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   postgres-orchestration:
     image: postgres:16-alpine
@@ -8,7 +10,7 @@ services:
       POSTGRES_PASSWORD: orchestration_pass
     ports:
       - "5433:5433"
-    command: -p 5433
+    command: ["postgres", "-p", "5433"]
     volumes:
       - orchestration_pgdata:/var/lib/postgresql/data
 
@@ -27,6 +29,17 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: local-kafka:29092
+    depends_on:
+      - kafka
 
 volumes:
   orchestration_pgdata:
