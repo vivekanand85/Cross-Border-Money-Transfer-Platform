@@ -27,7 +27,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-
+/**
+ * Proves ReviewController's approve/decline endpoints actually work —
+ * real HTTP calls (via TestRestTemplate, against the real embedded server
+ * this @SpringBootTest starts) hitting real repositories against real
+ * Postgres. LedgerClient is mocked, same reasoning as other tests: this is
+ * about proving the review workflow, not re-proving Ledger integration.
+ */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
 class ReviewControllerIntegrationTest {
@@ -64,10 +70,19 @@ class ReviewControllerIntegrationTest {
     @MockBean
     private LedgerClient ledgerClient;
 
+    @MockBean
+    private com.moneytransfer.orchestration_service.client.ApolloPayInClient apolloPayInClient;
+
     @Test
     void approve_movesTransferToPayIn_andCallsLedger() {
         when(ledgerClient.postTransaction(any(), any(), any(), any(), any(), any()))
                 .thenReturn(new LedgerTransactionResponse(UUID.randomUUID(), "k", "TRANSFER_PAY_IN", "INR", "POSTED"));
+
+        when(apolloPayInClient.payIn(any()))
+                .thenReturn(com.moneytransfer.orchestration_service.dto.PayInResult.builder()
+                        .stripePaymentIntentId("pi_test_stub")
+                        .status("succeeded")
+                        .build());
 
         Transfer transfer = transferOrchestrationService.initiateTransfer(
                 "review-approve-001", 5000L, "INR", UUID.randomUUID(), UUID.randomUUID());

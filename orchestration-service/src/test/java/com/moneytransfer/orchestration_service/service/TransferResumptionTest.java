@@ -26,19 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-/**
- * THE central proof of this whole design: a transfer's progress through the
- * saga is never held only in memory — see the class-level explanation from
- * the original version of this test for the full reasoning.
- *
- * UPDATED: TransferOrchestrationService now calls a real Ledger service via
- * LedgerClient when transitioning to PAY_IN. This test is about proving
- * ORCHESTRATION's own resumption behavior, not Ledger's — so LedgerClient
- * is mocked here (@MockBean) rather than requiring a real Ledger instance
- * to be running alongside this test. A separate, dedicated integration test
- * (not this one) would be the right place to prove the real end-to-end call
- * to a live Ledger service.
- */
+
 @SpringBootTest
 @Testcontainers
 class TransferResumptionTest {
@@ -76,11 +64,20 @@ class TransferResumptionTest {
     @MockBean
     private LedgerClient ledgerClient;
 
+    @MockBean
+    private com.moneytransfer.orchestration_service.client.ApolloPayInClient apolloPayInClient;
+
     @Test
     void transferState_survivesSimulatedCrash_becauseItIsPersistedNotHeldInMemory() {
 
         when(ledgerClient.postTransaction(any(), any(), any(), any(), any(), any()))
                 .thenReturn(new LedgerTransactionResponse(UUID.randomUUID(), "stubbed-key", "TRANSFER_PAY_IN", "INR", "POSTED"));
+
+        when(apolloPayInClient.payIn(any()))
+                .thenReturn(com.moneytransfer.orchestration_service.dto.PayInResult.builder()
+                        .stripePaymentIntentId("pi_test_stub")
+                        .status("succeeded")
+                        .build());
 
         // --- "Before the crash": drive the transfer partway through the saga ---
         Transfer created = transferOrchestrationService.initiateTransfer(

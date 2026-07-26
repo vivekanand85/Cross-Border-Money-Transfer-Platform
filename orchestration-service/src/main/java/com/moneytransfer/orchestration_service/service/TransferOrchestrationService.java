@@ -36,7 +36,7 @@ public class TransferOrchestrationService {
     private final RiskScreeningClient riskScreeningClient;
     private final ReviewQueueRepository reviewQueueRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
-
+    private final com.moneytransfer.orchestration_service.client.ApolloPayInClient apolloPayInClient;
     @Transactional
     public Transfer initiateTransfer(String idempotencyKey, Long amount, String currency,
                                       UUID sourceAccountId, UUID destAccountId) {
@@ -80,6 +80,7 @@ public class TransferOrchestrationService {
         }
 
         if (targetState == TransferState.PAY_IN) {
+        	 callApolloForPayIn(transfer, targetState);
             callLedgerForPayIn(transfer, targetState);
         }
 
@@ -94,7 +95,19 @@ public class TransferOrchestrationService {
         return saved;
     }
 
-    @Transactional
+    private void callApolloForPayIn(Transfer transfer, TransferState targetState) {
+    	String idempotencyKey = transfer.getId() + "-" + targetState.name();
+    	com.moneytransfer.orchestration_service.dto.PayInRequest request =com.moneytransfer.orchestration_service.dto.PayInRequest.builder()
+                .transferId(transfer.getId())
+                .amount(transfer.getAmount())
+                .currency(transfer.getCurrency())
+                .idempotencyKey(idempotencyKey)
+                .build();
+    	apolloPayInClient.payIn(request);
+
+	}
+
+	@Transactional
     public Transfer runScreening(UUID transferId) {
 
         Transfer transfer = transferRepository.findById(transferId)
