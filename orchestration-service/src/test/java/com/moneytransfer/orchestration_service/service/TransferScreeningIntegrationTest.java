@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+
 @SpringBootTest
 @Testcontainers
 class TransferScreeningIntegrationTest {
@@ -99,7 +100,7 @@ class TransferScreeningIntegrationTest {
                         .withBody("{\"riskScore\":10,\"decision\":\"APPROVE\",\"reason\":\"low risk\"}")));
 
         Transfer created = transferOrchestrationService.initiateTransfer(
-                "screen-low-risk", 1000L, "INR", UUID.randomUUID(), UUID.randomUUID());
+                "screen-low-risk", 1000L, "INR", UUID.randomUUID(), UUID.randomUUID(), "BANK");
 
         Transfer result = transferOrchestrationService.runScreening(created.getId());
 
@@ -116,7 +117,7 @@ class TransferScreeningIntegrationTest {
                         .withBody("{\"riskScore\":92,\"decision\":\"MANUAL_REVIEW\",\"reason\":\"amount exceeds threshold\"}")));
 
         Transfer created = transferOrchestrationService.initiateTransfer(
-                "screen-high-risk", 999999L, "INR", UUID.randomUUID(), UUID.randomUUID());
+                "screen-high-risk", 999999L, "INR", UUID.randomUUID(), UUID.randomUUID(), "BANK");
 
         Transfer result = transferOrchestrationService.runScreening(created.getId());
 
@@ -127,5 +128,6 @@ class TransferScreeningIntegrationTest {
 
         assertThat(entry.getRiskScore()).isEqualTo(92);
         assertThat(entry.getReason()).contains("amount exceeds threshold");
-   }
+
+    }
 }

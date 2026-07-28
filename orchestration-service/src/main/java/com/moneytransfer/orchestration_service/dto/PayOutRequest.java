@@ -13,12 +13,11 @@ import lombok.Setter;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class InitiateTransferRequest {
+public class PayOutRequest {
 
-	private String idempotencyKey;
+	private UUID transferId;
 	private Long amount;
 	private String currency;
-	private UUID sourceAccountId;
-	private UUID destAccountId;
-	private String payoutMode; 
+	private String idempotencyKey;
+	private String payoutMode;
 }

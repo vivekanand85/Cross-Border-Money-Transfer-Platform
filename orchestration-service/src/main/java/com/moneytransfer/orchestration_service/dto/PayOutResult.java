@@ -1,7 +1,5 @@
 package com.moneytransfer.orchestration_service.dto;
 
-import java.util.UUID;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -13,12 +11,9 @@ import lombok.Setter;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class InitiateTransferRequest {
+public class PayOutResult {
 
-	private String idempotencyKey;
-	private Long amount;
-	private String currency;
-	private UUID sourceAccountId;
-	private UUID destAccountId;
-	private String payoutMode; 
+	private String apnReferenceId;
+	private String status;
+	private String pickupCode;
 }

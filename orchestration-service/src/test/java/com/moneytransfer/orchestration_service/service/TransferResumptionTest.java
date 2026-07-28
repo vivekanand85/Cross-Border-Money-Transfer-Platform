@@ -57,10 +57,7 @@ class TransferResumptionTest {
     @Autowired
     private TransferStateTransitionRepository transitionRepository;
 
-    // Replaces the real LedgerClient bean with a Mockito mock for this test
-    // context only. No real HTTP call happens — postTransaction() just
-    // returns a canned response, so PAY_IN transitions succeed without a
-    // running Ledger instance.
+
     @MockBean
     private LedgerClient ledgerClient;
 
@@ -79,18 +76,15 @@ class TransferResumptionTest {
                         .status("succeeded")
                         .build());
 
-        // --- "Before the crash": drive the transfer partway through the saga ---
         Transfer created = transferOrchestrationService.initiateTransfer(
-                "resume-key-1", 7500L, "INR", UUID.randomUUID(), UUID.randomUUID());
+                "resume-key-1", 7500L, "INR", UUID.randomUUID(), UUID.randomUUID(), "BANK");
 
         transferOrchestrationService.transitionTo(created.getId(), TransferState.SCREENING, "SYSTEM", null);
         transferOrchestrationService.transitionTo(created.getId(), TransferState.PAY_IN, "SYSTEM", null);
 
         UUID transferId = created.getId();
 
-        // --- "The crash": no in-memory saga object exists to lose. Prove it
-        // by going back to the DB fresh through a plain repository call. ---
-        Transfer reloaded = transferRepository.findById(transferId)
+               Transfer reloaded = transferRepository.findById(transferId)
                 .orElseThrow(() -> new AssertionError("Transfer vanished — state was not actually persisted!"));
 
         assertThat(reloaded.getCurrentState()).isEqualTo(TransferState.PAY_IN);
@@ -105,9 +99,7 @@ class TransferResumptionTest {
         assertThat(history.get(1).getToState()).isEqualTo(TransferState.SCREENING);
         assertThat(history.get(2).getToState()).isEqualTo(TransferState.PAY_IN);
 
-        // --- Resuming the saga from here works exactly like any other
-        // transition call — there is no special "resume" method. ---
-        Transfer resumed = transferOrchestrationService.transitionTo(
+               Transfer resumed = transferOrchestrationService.transitionTo(
                 transferId, TransferState.PAY_OUT, "SYSTEM_RESUMED_AFTER_RESTART", null);
 
         assertThat(resumed.getCurrentState()).isEqualTo(TransferState.PAY_OUT);

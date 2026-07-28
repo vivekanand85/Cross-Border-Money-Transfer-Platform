@@ -30,8 +30,14 @@ public enum TransferState {
 	PAY_OUT {
         @Override
         public Set<TransferState> allowedNextStates() {
-            return EnumSet.of(SETTLED, FAILED, REVERSED);
+            return EnumSet.of(SETTLED, FAILED, REVERSED,AWAITING_PICKUP);
         }
+    },
+	AWAITING_PICKUP{
+    	@Override
+    	public Set<TransferState> allowedNextStates(){
+    		return EnumSet.of(SETTLED,FAILED,REVERSED);
+    	}
     },
 	SETTLED {
         @Override

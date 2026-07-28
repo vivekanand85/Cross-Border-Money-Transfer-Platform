@@ -27,13 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-/**
- * Proves ReviewController's approve/decline endpoints actually work —
- * real HTTP calls (via TestRestTemplate, against the real embedded server
- * this @SpringBootTest starts) hitting real repositories against real
- * Postgres. LedgerClient is mocked, same reasoning as other tests: this is
- * about proving the review workflow, not re-proving Ledger integration.
- */
+
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
 class ReviewControllerIntegrationTest {
@@ -85,7 +79,7 @@ class ReviewControllerIntegrationTest {
                         .build());
 
         Transfer transfer = transferOrchestrationService.initiateTransfer(
-                "review-approve-001", 5000L, "INR", UUID.randomUUID(), UUID.randomUUID());
+                "review-approve-001", 5000L, "INR", UUID.randomUUID(), UUID.randomUUID(), "BANK");
         transferOrchestrationService.transitionTo(transfer.getId(), TransferState.SCREENING, "SYSTEM", null);
         transferOrchestrationService.transitionTo(transfer.getId(), TransferState.PENDING_REVIEW, "SYSTEM", null);
 
@@ -106,16 +100,14 @@ class ReviewControllerIntegrationTest {
         assertThat(response.getBody().getStatus()).isEqualTo("APPROVED");
         assertThat(response.getBody().getReviewedBy()).isEqualTo("test-reviewer");
 
-        // Confirm approve() actually drove the underlying transfer forward,
-        // not just updated the review queue row in isolation.
-        Transfer reloaded = transferRepository.findById(transfer.getId()).orElseThrow();
+               Transfer reloaded = transferRepository.findById(transfer.getId()).orElseThrow();
         assertThat(reloaded.getCurrentState()).isEqualTo(TransferState.PAY_IN);
     }
 
     @Test
     void decline_movesTransferToFailed() {
         Transfer transfer = transferOrchestrationService.initiateTransfer(
-                "review-decline-001", 3000L, "INR", UUID.randomUUID(), UUID.randomUUID());
+                "review-decline-001", 3000L, "INR", UUID.randomUUID(), UUID.randomUUID(), "BANK");
         transferOrchestrationService.transitionTo(transfer.getId(), TransferState.SCREENING, "SYSTEM", null);
         transferOrchestrationService.transitionTo(transfer.getId(), TransferState.PENDING_REVIEW, "SYSTEM", null);
 

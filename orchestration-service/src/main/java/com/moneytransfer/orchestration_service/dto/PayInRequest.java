@@ -15,7 +15,7 @@ import lombok.Setter;
 @AllArgsConstructor
 public class PayInRequest {
 	private UUID transferId;
-    private Long amount;     // minor units, same convention as Ledger
+    private Long amount;
     private String currency;
     private String idempotencyKey;
 }

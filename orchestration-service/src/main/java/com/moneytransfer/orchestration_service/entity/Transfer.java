@@ -38,7 +38,9 @@ public class Transfer {
 
     @Column(name = "dest_account_id", nullable = false)
     private UUID destAccountId;
-
+    
+    @Column(name="payout_mode",nullable = false,length=20)
+    private String payoutMode;
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 

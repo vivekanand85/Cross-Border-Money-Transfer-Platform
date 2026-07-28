@@ -67,7 +67,7 @@ class PayInIdempotencyTest {
                 .thenReturn(PayInResult.builder().stripePaymentIntentId("pi_test").status("succeeded").build());
 
         Transfer transfer = transferOrchestrationService.initiateTransfer(
-                "double-payin-key", 50000L, "INR", UUID.randomUUID(), UUID.randomUUID());
+                "double-payin-key", 50000L, "INR", UUID.randomUUID(), UUID.randomUUID(), "BANK");
         transferOrchestrationService.transitionTo(transfer.getId(), TransferState.SCREENING, "SYSTEM", null);
 
         String expectedKey = transfer.getId() + "-PAY_IN";
@@ -75,15 +75,12 @@ class PayInIdempotencyTest {
         // First attempt succeeds normally.
         transferOrchestrationService.transitionTo(transfer.getId(), TransferState.PAY_IN, "SYSTEM", null);
 
-        // Second attempt — simulating a retry after a crash/timeout, the
-        // same way a resumed process would call transitionTo again.
-      
+       
         try {
             transferOrchestrationService.transitionTo(transfer.getId(), TransferState.PAY_IN, "SYSTEM", null);
         } catch (Exception ignoredExpectedIllegalTransition) {
-            
+            // expected — see note above
         }
-
 
         verify(apolloPayInClient, times(1))
                 .payIn(org.mockito.ArgumentMatchers.argThat(req -> req.getIdempotencyKey().equals(expectedKey)));

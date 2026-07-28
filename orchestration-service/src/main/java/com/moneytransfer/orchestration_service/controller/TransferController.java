@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.moneytransfer.orchestration_service.dto.InitiateTransferRequest;
@@ -30,7 +31,8 @@ public class TransferController {
                 request.getAmount(),
                 request.getCurrency(),
                 request.getSourceAccountId(),
-                request.getDestAccountId()
+                request.getDestAccountId(),
+                request.getPayoutMode()
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(transfer);
     }
@@ -52,5 +54,17 @@ public class TransferController {
     public ResponseEntity<Transfer> screen(@PathVariable UUID transferId) {
         Transfer transfer = transferOrchestrationService.runScreening(transferId);
         return ResponseEntity.ok(transfer);
+    }
+    @PostMapping("/{transferId}/payout")
+    public ResponseEntity<Transfer> payout(@PathVariable UUID transferId) {
+    	Transfer transfer=transferOrchestrationService.runPayOut(transferId);
+    	return ResponseEntity.ok(transfer);
+    }
+    
+    @PostMapping("/{transferId}/confirm-pickup")
+    public ResponseEntity<Transfer> confirmPickup(@PathVariable UUID transferId,
+            @RequestParam(defaultValue = "AGENT") String confirmedBy) {
+    	 Transfer transfer = transferOrchestrationService.confirmPickup(transferId, confirmedBy);
+    	 return ResponseEntity.ok(transfer);
     }
 }

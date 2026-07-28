@@ -116,10 +116,7 @@ public class TransactionService {
                     "idempotencyKey=" + incoming.getIdempotencyKey()
                             + " was already used with a different set of ledger entries.");
         }
-
-        // Compare as unordered multisets of (accountId, entryType, amount) —
-        // entry order isn't semantically meaningful, so don't require exact order match.
-        Set<String> existingSignature = existingEntries.stream()
+       Set<String> existingSignature = existingEntries.stream()
                 .map(e -> e.getAccountId() + "|" + e.getEntryType() + "|" + e.getAmount())
                 .collect(Collectors.toSet());
 

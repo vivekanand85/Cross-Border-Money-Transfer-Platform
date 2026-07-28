@@ -34,8 +34,9 @@ class TransferStateTest {
     }
 
     @Test
-    void payOut_canOnlyMoveTo_settledOrFailedOrReversed() {
-        assertLegal(TransferState.PAY_OUT, TransferState.SETTLED, TransferState.FAILED, TransferState.REVERSED);
+    void payOut_canOnlyMoveTo_settledOrFailedOrReversedOrAwaitingPickup() {
+        assertLegal(TransferState.PAY_OUT, TransferState.SETTLED, TransferState.FAILED,
+                TransferState.REVERSED, TransferState.AWAITING_PICKUP);
     }
 
     @ParameterizedTest
@@ -60,6 +61,8 @@ class TransferStateTest {
 
     @Test
     void initiated_cannotJumpDirectlyToSettled() {
+        // The specific illegal jump we manually verified via Postman earlier —
+        // now locked in as a permanent regression test.
         assertThat(TransferState.INITIATED.canTransitionTo(TransferState.SETTLED)).isFalse();
     }
 
@@ -70,7 +73,7 @@ class TransferStateTest {
 
     @Test
     void noState_canTransitionToItself() {
- 
+
         for (TransferState state : TransferState.values()) {
             assertThat(state.canTransitionTo(state))
                     .as("%s should not be able to transition to itself", state)
@@ -78,7 +81,7 @@ class TransferStateTest {
         }
     }
 
- 
+    
     private void assertLegal(TransferState fromState, TransferState... expectedLegalTargets) {
         EnumSet<TransferState> expected = EnumSet.noneOf(TransferState.class);
         for (TransferState s : expectedLegalTargets) {

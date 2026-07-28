@@ -1,7 +1,11 @@
 package com.moneytransfer.orchestration_service.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.moneytransfer.orchestration_service.client.ApnPayOutClient;
+import com.moneytransfer.orchestration_service.client.ApolloPayInClient;
 import com.moneytransfer.orchestration_service.client.RiskScreeningClient;
+import com.moneytransfer.orchestration_service.dto.PayOutRequest;
+import com.moneytransfer.orchestration_service.dto.PayOutResult;
 import com.moneytransfer.orchestration_service.dto.ScreeningRequest;
 import com.moneytransfer.orchestration_service.dto.ScreeningResult;
 import com.moneytransfer.orchestration_service.entity.OutboxEvent;
@@ -36,10 +40,12 @@ public class TransferOrchestrationService {
     private final RiskScreeningClient riskScreeningClient;
     private final ReviewQueueRepository reviewQueueRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final com.moneytransfer.orchestration_service.client.ApolloPayInClient apolloPayInClient;
+    private final ApolloPayInClient apolloPayInClient;
+    
+    private final ApnPayOutClient apnPayOutClient;
     @Transactional
     public Transfer initiateTransfer(String idempotencyKey, Long amount, String currency,
-                                      UUID sourceAccountId, UUID destAccountId) {
+                                      UUID sourceAccountId, UUID destAccountId,String payoutMode) {
 
         var existing = transferRepository.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
@@ -55,6 +61,7 @@ public class TransferOrchestrationService {
                 .currency(currency)
                 .sourceAccountId(sourceAccountId)
                 .destAccountId(destAccountId)
+                .payoutMode(payoutMode)
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
@@ -200,4 +207,47 @@ public class TransferOrchestrationService {
 
         outboxEventRepository.save(outboxEvent);
     }
+    
+    @Transactional
+    public Transfer runPayOut(UUID transferId) {
+    	 Transfer transfer = transferRepository.findById(transferId)
+                 .orElseThrow(() -> new IllegalStateTransitionException("No transfer found with id=" + transferId));
+    	
+    Transfer payingOut = transitionTo(transferId, TransferState.PAY_OUT, "SYSTEM", null);
+    String idempotencyKey = payingOut.getId() + "-PAY_OUT";
+    
+    PayOutRequest request = PayOutRequest.builder()
+                    .transferId(payingOut.getId())
+                    .amount(payingOut.getAmount())
+                    .currency(payingOut.getCurrency())
+                    .idempotencyKey(idempotencyKey)
+                    .payoutMode(payingOut.getPayoutMode())
+                    .build();
+    PayOutResult result = apnPayOutClient.payOut(request);
+    
+    
+    if("CASH".equals(payingOut.getPayoutMode())) {
+    	return transitionTo(transferId, TransferState.AWAITING_PICKUP, "APN_PAYOUT", " Pickup code generated: " + result.getPickupCode());
+    }else {
+    	callLedgerForPayOut(payingOut, idempotencyKey);
+    	return transitionTo(transferId, TransferState.SETTLED, "APN_PAYOUT",
+                "APN reference: " + result.getApnReferenceId());
+    }
+    }
+    
+    @Transactional
+    public Transfer confirmPickup(UUID transferId,String confirmedBy) {
+    	Transfer transfer = transferRepository.findById(transferId)
+                .orElseThrow(() -> new IllegalStateTransitionException("No transfer found with id=" + transferId));   
+    	
+    	String idempotencyKey = transfer.getId() + "-PAY_OUT";
+    	callLedgerForPayOut(transfer, idempotencyKey);
+    	return transitionTo(transferId, TransferState.SETTLED, confirmedBy, "Cash pickup confirmed");
+    }
+    
+    
+    private void callLedgerForPayOut(Transfer transfer, String idempotencyKey) {
+    	ledgerClient.postTransaction(idempotencyKey, "TRANSFER_PAY_OUT", transfer.getCurrency(),transfer.getSourceAccountId(), transfer.getDestAccountId(),transfer.getAmount());
+    }
+    
 }
