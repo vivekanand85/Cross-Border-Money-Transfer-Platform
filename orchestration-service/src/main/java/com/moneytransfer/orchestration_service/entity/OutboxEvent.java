@@ -26,7 +26,7 @@ public class OutboxEvent {
 
     @Column(name = "aggregate_id", nullable = false)
     private UUID aggregateId;
-
+    
     @Column(name = "event_type", nullable = false, length = 50)
     private String eventType;
 
@@ -42,4 +42,6 @@ public class OutboxEvent {
 
     @Column(name = "published_at")
     private OffsetDateTime publishedAt;
+    @Column(name = "correlation_id")
+    private String correlationId;
 }

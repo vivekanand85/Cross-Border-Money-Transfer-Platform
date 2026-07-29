@@ -1,0 +1,1 @@
+{"id":"a0f5f3c0-5d7c-4a04-9dba-3a48d5e4f39c","idempotencyKey":"payout-bank-001","currentState":"PAY_IN","amount":77000,"currency":"INR","correlationId":null,"sourceAccountId":"5687d64a-bf01-44b4-837a-f02235f457ea","destAccountId":"e8307db8-6dc7-431a-a4ac-fda1b2c29bba","payoutMode":"BANK","createdAt":"2026-07-27T07:20:06.519332Z","updatedAt":"2026-07-27T08:21:31.517286Z"}

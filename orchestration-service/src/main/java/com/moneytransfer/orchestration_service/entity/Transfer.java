@@ -32,7 +32,8 @@ public class Transfer {
 
     @Column(name = "currency", nullable = false, length = 3)
     private String currency;
-
+    @Column(name = "correlation_id", nullable = false)
+    private String correlationId;
     @Column(name = "source_account_id", nullable = false)
     private UUID sourceAccountId;
 

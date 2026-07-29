@@ -5,11 +5,15 @@ import com.moneytransfer.orchestration_service.repo.OutboxEventRepository;
  
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.slf4j.MDC;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
- 
+
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.List;
  
@@ -40,11 +44,18 @@ public class OutboxPoller {
     }
  
     private void publish(OutboxEvent event) throws Exception {
-              kafkaTemplate.send(KafkaTopics.TRANSFER_EVENTS, event.getAggregateId().toString(), event.getPayload())
-                .get();
+    	MDC.put("correlationId", event.getCorrelationId());
+    	
+    	ProducerRecord<String, String> record=new ProducerRecord<>(KafkaTopics.TRANSFER_EVENTS, event.getAggregateId().toString(), event.getPayload());
+    	if (event.getCorrelationId() != null) {
+    	    record.headers().add("X-Correlation-Id", event.getCorrelationId().getBytes(StandardCharsets.UTF_8));
+    	}
+    	record.headers().add("X-Correlation-Id", event.getCorrelationId().getBytes(StandardCharsets.UTF_8));
+    	kafkaTemplate.send(record).get();
  
-        log.info("Published outbox event id={} to topic={} key={}",
+    	log.info("Published outbox event id={} to topic={} key={}",
                 event.getId(), KafkaTopics.TRANSFER_EVENTS, event.getAggregateId());
+        MDC.clear();
     }
 }
  

@@ -10,5 +10,4 @@ public class OrchestrationServiceApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(OrchestrationServiceApplication.class, args);
 	}
-
 }

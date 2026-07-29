@@ -1,0 +1,1 @@
+{"id":"98becdce-da6e-434b-bc65-23b23aafe188","idempotencyKey":"payout-bank-007","currentState":"SCREENING","amount":199000,"currency":"INR","correlationId":null,"sourceAccountId":"5687d64a-bf01-44b4-837a-f02235f457ea","destAccountId":"e8307db8-6dc7-431a-a4ac-fda1b2c29bba","payoutMode":"BANK","createdAt":"2026-07-29T07:47:07.3608Z","updatedAt":"2026-07-29T13:17:37.7380659+05:30"}

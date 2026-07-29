@@ -20,7 +20,10 @@ import com.moneytransfer.orchestration_service.review.ReviewQueueEntry;
 import com.moneytransfer.orchestration_service.review.ReviewQueueRepository;
 import com.moneytransfer.orchestration_service.statemachine.TransferState;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
+
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +44,7 @@ public class TransferOrchestrationService {
     private final ReviewQueueRepository reviewQueueRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ApolloPayInClient apolloPayInClient;
+    private final MeterRegistry meterRegistry;
     
     private final ApnPayOutClient apnPayOutClient;
     @Transactional
@@ -49,13 +53,18 @@ public class TransferOrchestrationService {
 
         var existing = transferRepository.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
+            MDC.put("correlationId", existing.get().getCorrelationId());
             return existing.get();
         }
 
-        OffsetDateTime now = OffsetDateTime.now();
+        String correlationId = UUID.randomUUID().toString();
+        MDC.put("correlationId", correlationId);
 
+        OffsetDateTime now = OffsetDateTime.now();
+   
         Transfer transfer = Transfer.builder()
                 .idempotencyKey(idempotencyKey)
+                .correlationId(correlationId)
                 .currentState(TransferState.INITIATED)
                 .amount(amount)
                 .currency(currency)
@@ -78,14 +87,15 @@ public class TransferOrchestrationService {
 
         Transfer transfer = transferRepository.findById(transferId)
                 .orElseThrow(() -> new IllegalStateTransitionException("No transfer found with id=" + transferId));
-
+        
+        MDC.put("correlationId", transfer.getCorrelationId());
+        
         TransferState currentState = transfer.getCurrentState();
 
         if (!currentState.canTransitionTo(targetState)) {
             throw new IllegalStateTransitionException(
                     "Illegal transition for transfer=" + transferId + ": " + currentState + " -> " + targetState);
         }
-
         if (targetState == TransferState.PAY_IN) {
         	 callApolloForPayIn(transfer, targetState);
             callLedgerForPayIn(transfer, targetState);
@@ -96,7 +106,11 @@ public class TransferOrchestrationService {
         transfer.setCurrentState(targetState);
         transfer.setUpdatedAt(now);
         Transfer saved = transferRepository.save(transfer);
-
+        if(targetState==TransferState.SETTLED) {
+        	meterRegistry.counter("transfer.outcome", "result","success").increment();
+        }else if(targetState == TransferState.FAILED) {
+        	meterRegistry.counter("transfer.outcome", "result", "failed").increment();
+        }
         recordTransitionAndOutbox(saved, currentState, targetState, triggeredBy, reason, now);
 
         return saved;
@@ -119,8 +133,7 @@ public class TransferOrchestrationService {
 
         Transfer transfer = transferRepository.findById(transferId)
                 .orElseThrow(() -> new IllegalStateTransitionException("No transfer found with id=" + transferId));
-
-
+        MDC.put("correlationId", transfer.getCorrelationId());
         Transfer screening = transitionTo(transferId, TransferState.SCREENING, "SYSTEM", null);
 
         ScreeningRequest request = ScreeningRequest.builder()
@@ -132,7 +145,7 @@ public class TransferOrchestrationService {
                 .build();
 
         ScreeningResult result = riskScreeningClient.screen(request);
-
+        meterRegistry.counter("screening.decision", "decision", result.getDecision()).increment();
         if ("APPROVE".equals(result.getDecision())) {
             return transitionTo(transferId, TransferState.PAY_IN, "RISK_SCREENING",
                     "Auto-approved, riskScore=" + result.getRiskScore());
@@ -188,6 +201,7 @@ public class TransferOrchestrationService {
         eventPayload.put("toState", toState.name());
         eventPayload.put("triggeredBy", triggeredBy);
         eventPayload.put("timestamp", now.toString());
+        eventPayload.put("correlationId", transfer.getCorrelationId());
 
         String payloadJson;
         try {
@@ -199,6 +213,7 @@ public class TransferOrchestrationService {
         OutboxEvent outboxEvent = OutboxEvent.builder()
                 .aggregateType("TRANSFER")
                 .aggregateId(transfer.getId())
+                .correlationId(transfer.getCorrelationId())
                 .eventType("TRANSFER_STATE_CHANGED")
                 .payload(payloadJson)
                 .status("PENDING")
@@ -212,7 +227,7 @@ public class TransferOrchestrationService {
     public Transfer runPayOut(UUID transferId) {
     	 Transfer transfer = transferRepository.findById(transferId)
                  .orElseThrow(() -> new IllegalStateTransitionException("No transfer found with id=" + transferId));
-    	
+    	 MDC.put("correlationId", transfer.getCorrelationId());
     Transfer payingOut = transitionTo(transferId, TransferState.PAY_OUT, "SYSTEM", null);
     String idempotencyKey = payingOut.getId() + "-PAY_OUT";
     
@@ -239,7 +254,7 @@ public class TransferOrchestrationService {
     public Transfer confirmPickup(UUID transferId,String confirmedBy) {
     	Transfer transfer = transferRepository.findById(transferId)
                 .orElseThrow(() -> new IllegalStateTransitionException("No transfer found with id=" + transferId));   
-    	
+    	MDC.put("correlationId", transfer.getCorrelationId());
     	String idempotencyKey = transfer.getId() + "-PAY_OUT";
     	callLedgerForPayOut(transfer, idempotencyKey);
     	return transitionTo(transferId, TransferState.SETTLED, confirmedBy, "Cash pickup confirmed");
