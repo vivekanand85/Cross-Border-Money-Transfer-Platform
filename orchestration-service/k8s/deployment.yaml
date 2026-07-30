@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestration-service
+  labels:
+    app: orchestration-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orchestration-service
+  template:
+    metadata:
+      labels:
+        app: orchestration-service
+    spec:
+      containers:
+        - name: orchestration-service
+          image: orchestration-service:local
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8082
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://172.19.0.1:5433/orchestration_db"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "orchestration_user"
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: "orchestration_pass"
+            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              value: "172.19.0.1:9094"
+            - name: LEDGER_SERVICE_BASE_URL
+              value: "http://ledger-service:8081"
+            - name: RISK_SCREENING_BASE_URL
+              value: "http://172.19.0.1:8089"
+            - name: APN_BASE_URL
+              value: "http://172.19.0.1:8091"
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8082
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8082
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 3

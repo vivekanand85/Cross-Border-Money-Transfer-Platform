@@ -21,6 +21,7 @@ import com.moneytransfer.orchestration_service.review.ReviewQueueRepository;
 import com.moneytransfer.orchestration_service.statemachine.TransferState;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 
 import org.slf4j.MDC;
@@ -124,7 +125,9 @@ public class TransferOrchestrationService {
                 .currency(transfer.getCurrency())
                 .idempotencyKey(idempotencyKey)
                 .build();
-    	apolloPayInClient.payIn(request);
+        Timer.Sample sample = Timer.start(meterRegistry);
+        apolloPayInClient.payIn(request);
+        sample.stop(meterRegistry.timer("apollo.payin.duration"));
 
 	}
 
@@ -143,10 +146,9 @@ public class TransferOrchestrationService {
                 .sourceAccountId(screening.getSourceAccountId())
                 .destAccountId(screening.getDestAccountId())
                 .build();
-
+        Timer.Sample screeningSample = Timer.start(meterRegistry);
         ScreeningResult result = riskScreeningClient.screen(request);
-        meterRegistry.counter("screening.decision", "decision", result.getDecision()).increment();
-        if ("APPROVE".equals(result.getDecision())) {
+        screeningSample.stop(meterRegistry.timer("screening.client.duration"));                if ("APPROVE".equals(result.getDecision())) {
             return transitionTo(transferId, TransferState.PAY_IN, "RISK_SCREENING",
                     "Auto-approved, riskScore=" + result.getRiskScore());
         } else {
@@ -169,6 +171,7 @@ public class TransferOrchestrationService {
 
     private void callLedgerForPayIn(Transfer transfer, TransferState targetState) {
         String ledgerIdempotencyKey = transfer.getId() + "-" + targetState.name();
+        Timer.Sample sample = Timer.start(meterRegistry);
 
         ledgerClient.postTransaction(
                 ledgerIdempotencyKey,
@@ -178,6 +181,8 @@ public class TransferOrchestrationService {
                 transfer.getDestAccountId(),
                 transfer.getAmount()
         );
+        sample.stop(meterRegistry.timer("ledger.payin.duration"));
+
     }
 
     private void recordTransitionAndOutbox(Transfer transfer, TransferState fromState, TransferState toState,

@@ -1,0 +1,84 @@
+spring:
+  application:
+    name: orchestration-service
+  datasource:
+    url: jdbc:postgresql://localhost:5433/orchestration_db
+    username: orchestration_user
+    password: orchestration_pass
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 10
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
+  cloud:
+    compatibility-verifier:
+      enabled: false
+    
+
+server:
+  port: 8082
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http:
+          server:
+            requests: true
+
+stripe:
+  api-key: {stripe-key}
+
+ledger-service:
+  base-url: http://localhost:8081
+
+risk-screening:
+  base-url: http://localhost:8089
+
+resilience4j:
+  retry:
+    instances:
+      riskScreening:
+        max-attempts: 3
+        wait-duration: 500ms
+        retry-exceptions:
+          - com.moneytransfer.orchestration_service.client.ScreeningClientException
+
+      apolloPayIn:
+        max-attempts: 3
+        wait-duration: 500ms
+
+  circuitbreaker:
+    instances:
+      riskScreening:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+
+      apolloPayIn:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+
+apn:
+  base-url: http://localhost:8091
