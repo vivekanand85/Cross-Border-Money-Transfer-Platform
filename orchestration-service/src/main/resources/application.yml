@@ -43,7 +43,7 @@ management:
             requests: true
 
 stripe:
-  api-key: {stripe-key}
+  api-key: ${STRIPE_API_KEY:sk_test_dummy_local_fallback}
 
 ledger-service:
   base-url: http://localhost:8081

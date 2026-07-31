@@ -27,6 +27,8 @@ jobs:
 
       - name: Build and unit test
         working-directory: ${{ matrix.service }}
+        env:
+          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
         run: ./mvnw clean verify -B
 
       - name: Build Docker image
