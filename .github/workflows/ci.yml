@@ -7,6 +7,13 @@ on:
     branches: [main]
 
 jobs:
+  name: Make mvnw executable
+  working-directory: ${{ matrix.service }}
+  run: chmod +x mvnw
+
+  name: Build and unit test
+  working-directory: ${{ matrix.service }}
+  run: ./mvnw clean verify -B
   build-test:
     runs-on: ubuntu-latest
     strategy:
