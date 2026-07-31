@@ -7,13 +7,6 @@ on:
     branches: [main]
 
 jobs:
-  name: Make mvnw executable
-  working-directory: ${{ matrix.service }}
-  run: chmod +x mvnw
-
-  name: Build and unit test
-  working-directory: ${{ matrix.service }}
-  run: ./mvnw clean verify -B
   build-test:
     runs-on: ubuntu-latest
     strategy:
@@ -21,6 +14,10 @@ jobs:
         service: [ledger-service, orchestration-service]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Make mvnw executable
+        working-directory: ${{ matrix.service }}
+        run: chmod +x mvnw
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -31,9 +28,6 @@ jobs:
       - name: Build and unit test
         working-directory: ${{ matrix.service }}
         run: ./mvnw clean verify -B
-        # Testcontainers-based integration tests run here too — verify pulls in
-        # any test-scoped Testcontainers deps automatically via the surefire/failsafe lifecycle.
-        # GitHub Actions runners have Docker preinstalled, so Testcontainers works out of the box.
 
       - name: Build Docker image
         working-directory: ${{ matrix.service }}
@@ -62,10 +56,4 @@ jobs:
       - name: Deploy stage (local simulation only)
         run: |
           echo "This stage documents the deploy step for portfolio purposes."
-          echo "A GitHub Actions runner is an ephemeral cloud VM and cannot be"
-          echo "a real target for a laptop-only Kind cluster — Kind only exists"
-          echo "on the developer's machine, not in CI infrastructure."
-          echo "In a real environment this stage would run 'kubectl apply' or"
-          echo "a Helm upgrade against a persistent, network-reachable cluster"
-          echo "(e.g. an EKS cluster, which is exactly what the AWS credits"
-          echo "would be used for as a stretch goal)."
+          echo "GitHub Actions runner is ephemeral, so real deploy would target a persistent cluster."
