@@ -44,18 +44,22 @@ public class OutboxPoller {
     }
  
     private void publish(OutboxEvent event) throws Exception {
-    	MDC.put("correlationId", event.getCorrelationId());
-    	
-    	ProducerRecord<String, String> record=new ProducerRecord<>(KafkaTopics.TRANSFER_EVENTS, event.getAggregateId().toString(), event.getPayload());
     	if (event.getCorrelationId() != null) {
-    	    record.headers().add("X-Correlation-Id", event.getCorrelationId().getBytes(StandardCharsets.UTF_8));
+    	    MDC.put("correlationId", event.getCorrelationId());
     	}
-    	record.headers().add("X-Correlation-Id", event.getCorrelationId().getBytes(StandardCharsets.UTF_8));
-    	kafkaTemplate.send(record).get();
- 
-    	log.info("Published outbox event id={} to topic={} key={}",
-                event.getId(), KafkaTopics.TRANSFER_EVENTS, event.getAggregateId());
-        MDC.clear();
+
+    ProducerRecord<String, String> record = new ProducerRecord<>(
+            KafkaTopics.TRANSFER_EVENTS, event.getAggregateId().toString(), event.getPayload());
+
+    if (event.getCorrelationId() != null) {
+        record.headers().add("X-Correlation-Id", event.getCorrelationId().getBytes(StandardCharsets.UTF_8));
     }
+
+    kafkaTemplate.send(record).get();
+
+    log.info("Published outbox event id={} to topic={} key={}",
+            event.getId(), KafkaTopics.TRANSFER_EVENTS, event.getAggregateId());
+    MDC.clear();
+}
 }
  

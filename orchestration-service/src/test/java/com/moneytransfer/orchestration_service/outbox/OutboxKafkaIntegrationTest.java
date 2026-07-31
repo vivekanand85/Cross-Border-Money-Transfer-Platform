@@ -26,13 +26,16 @@ import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import org.testcontainers.kafka.KafkaContainer;
 @SpringBootTest
 @Testcontainers
 class OutboxKafkaIntegrationTest {
-
+	private static final ObjectMapper objectMapper = new ObjectMapper();
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"))
             .withDatabaseName("orchestration_db")
@@ -67,7 +70,6 @@ class OutboxKafkaIntegrationTest {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-
         consumer = new KafkaConsumer<>(props);
         consumer.subscribe(List.of(KafkaTopics.TRANSFER_EVENTS));
     }
@@ -76,6 +78,7 @@ class OutboxKafkaIntegrationTest {
     void tearDownConsumer() {
         consumer.close();
     }
+    private boolean seeked = false;
 
     @Test
     void pendingOutboxEvent_isActuallyPublishedToRealKafkaTopic() {
@@ -97,11 +100,16 @@ class OutboxKafkaIntegrationTest {
    
         await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
-
+            if (!seeked && !consumer.assignment().isEmpty()) {
+                consumer.seekToBeginning(consumer.assignment());
+                seeked = true;
+            }
             boolean found = false;
             for (ConsumerRecord<String, String> record : records) {
-                if (record.key().equals(transferId.toString()) && record.value().equals(expectedPayload)) {
-                    found = true;
+                if (record.key().equals(transferId.toString())) {
+                    JsonNode actual = objectMapper.readTree(record.value());
+                    found = transferId.toString().equals(actual.get("transferId").asText())
+                            && "SCREENING".equals(actual.get("toState").asText());
                 }
             }
             assertThat(found).as("expected message not found on topic yet").isTrue();

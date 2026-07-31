@@ -12,7 +12,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
-
+import org.testcontainers.kafka.KafkaContainer;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -32,16 +32,22 @@ class OutboxPollerIntegrationTest {
             .withDatabaseName("orchestration_db")
             .withUsername("orchestration_user")
             .withPassword("orchestration_pass");
+@Container
+static KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("apache/kafka:3.8.0"));
 
     static {
         postgres.start();
+        kafka.start();
     }
+    
+
 
     @DynamicPropertySource
     static void overrideDatasourceProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+    	registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
     }
 
     @Autowired

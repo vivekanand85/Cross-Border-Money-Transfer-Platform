@@ -22,8 +22,8 @@ public class RiskScreeningClientImpl implements RiskScreeningClient {
     }
 
 	@Override
-	@CircuitBreaker(name="riskScreening",fallbackMethod="fallbackScreen")
-	@Retry(name="riskScreening")
+	@CircuitBreaker(name="riskScreening")
+	@Retry(name="riskScreening",fallbackMethod="fallbackScreen")
 	public ScreeningResult screen(ScreeningRequest request) {
 		try {
 			return webClient.post()
